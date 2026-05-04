@@ -15,8 +15,8 @@ dist/
 build/
 *.egg-info/
 
-# Generated
-docs/superpowers/
+# Generated (scaffolding artifacts, not design docs)
+docs/superpowers/plans/
 
 # Local Claude Code session settings (permissions, etc.)
 .claude/settings.local.json
