@@ -19,7 +19,7 @@ export async function switchCommand(windowId) {
   }
 
   try {
-    await focusWindow(windowId);
+    await focusWindow(instance.folderPath);
     console.log(`Focused: ${instance.windowTitle}`);
   } catch (err) {
     console.error('Error focusing window:', err.message);

@@ -1,5 +1,12 @@
 import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 import os from 'os';
+
+const WORKSPACE_STORAGE = path.join(
+  os.homedir(),
+  'Library/Application Support/Code/User/workspaceStorage'
+);
 
 export async function discoverVSCodeInstances() {
   if (os.platform() !== 'darwin') {
@@ -7,33 +14,66 @@ export async function discoverVSCodeInstances() {
     return [];
   }
 
-  try {
-    // Use AppleScript to list all VSCode windows
-    const script = `
-      tell application "System Events"
-        set vscodeWindows to {}
-        tell process "Code"
-          set windowCount to count of windows
-          repeat with i from 1 to windowCount
-            set windowTitle to name of window i
-            set end of vscodeWindows to windowTitle
-          end repeat
-        end tell
-        return vscodeWindows as string
-      end tell
-    `;
+  const pid = getVSCodePid();
+  if (!pid) return [];
 
-    const result = execSync(`osascript -e '${script}'`, { encoding: 'utf-8' });
-    const titles = result.trim().split(', ').filter(t => t.length > 0);
+  const storageIds = getOpenWorkspaceStorageIds(pid);
+  const instances = [];
 
-    // Create a simple instance per window with title as both id and name
-    return titles.map((title, index) => ({
-      id: `vscode-${index}`,
+  for (const id of storageIds) {
+    const folderUri = readWorkspaceFolder(id);
+    if (!folderUri) continue;
+
+    const folderPath = decodeURIComponent(folderUri.replace('file://', ''));
+    const title = path.basename(folderPath);
+
+    instances.push({
+      id: `vscode-${instances.length}`,
       windowTitle: title,
-      workspaceFolders: []
-    }));
-  } catch (err) {
-    // VSCode not running or AppleScript failed
+      folderPath,
+      workspaceFolders: [folderPath],
+    });
+  }
+
+  return instances;
+}
+
+function getVSCodePid() {
+  try {
+    return execSync('pgrep -f "MacOS/Code$"', { encoding: 'utf-8' }).trim();
+  } catch {
+    return '';
+  }
+}
+
+function getOpenWorkspaceStorageIds(pid) {
+  try {
+    const output = execSync(`lsof -p ${pid}`, { encoding: 'utf-8', shell: true, stdio: ['pipe', 'pipe', 'ignore'] });
+    const seen = new Set();
+    const ids = [];
+
+    for (const line of output.split('\n')) {
+      const match = line.match(/workspaceStorage\/([^/]+)\/state\.vscdb$/);
+      if (match && !seen.has(match[1])) {
+        seen.add(match[1]);
+        ids.push(match[1]);
+      }
+    }
+
+    return ids;
+  } catch {
     return [];
+  }
+}
+
+function readWorkspaceFolder(storageId) {
+  const workspaceJson = path.join(WORKSPACE_STORAGE, storageId, 'workspace.json');
+  if (!fs.existsSync(workspaceJson)) return null;
+
+  try {
+    const data = JSON.parse(fs.readFileSync(workspaceJson, 'utf-8'));
+    return data.folder || null;
+  } catch {
+    return null;
   }
 }

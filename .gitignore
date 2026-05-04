@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+
+# Environment
+.env
+.env.local
+
+# Build output
+dist/
+build/
+*.egg-info/
+
+# Generated
+docs/superpowers/
+
+# Local Claude Code session settings (permissions, etc.)
+.claude/settings.local.json
