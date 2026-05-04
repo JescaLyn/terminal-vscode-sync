@@ -1,3 +1,5 @@
+import { listWindows } from './list-command.js';
+
 export async function handleCommand(args) {
   if (args.length === 0) {
     showHelp();
@@ -8,7 +10,7 @@ export async function handleCommand(args) {
 
   switch (command) {
     case 'list':
-      console.log('list command not yet implemented');
+      await listWindows();
       break;
     case 'switch':
       console.log('switch command not yet implemented');
