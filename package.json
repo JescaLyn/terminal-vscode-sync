@@ -1,0 +1,19 @@
+{
+  "name": "vscode-window-management",
+  "version": "1.0.0",
+  "description": "A simple UI for managing multiple VSCode windows and easily switching between them. When possible, switching a Terminal tab automatically switches the VSCode window to the matching project.",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "vscode-windows": "src/index.js"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
