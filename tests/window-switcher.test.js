@@ -19,4 +19,12 @@ describe('Window Switcher', () => {
       /only supports macOS/
     );
   });
+
+  it('should throw when code CLI is not found', async () => {
+    if (os.platform() !== 'darwin') return;
+    await assert.rejects(
+      () => focusWindow('/some/path', { codeCli: null }),
+      /VSCode "code" CLI not found/
+    );
+  });
 });

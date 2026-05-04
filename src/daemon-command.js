@@ -48,7 +48,7 @@ if [[ -z $_VSCODE_BRIDGE_LOADED ]]; then
         fi
       fi
     done
-  } &!
+  } > /dev/null 2>&1 &!
 fi
 ${CWD_HOOK_END}`;
 }
