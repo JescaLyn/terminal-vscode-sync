@@ -28,12 +28,16 @@ ${HOOK_END}`;
 
 function buildCwdHook() {
   return `${CWD_HOOK_START}
-function _vscode_bridge_update_cwd() {
-  echo "$(pwd)" > "${CWD_FILE}" 2>/dev/null
-}
-chpwd_functions+=(_vscode_bridge_update_cwd)
-precmd_functions+=(_vscode_bridge_update_cwd)
-trap '_vscode_bridge_update_cwd' WINCH
+if [[ -z $_VSCODE_BRIDGE_LOADED ]]; then
+  export _VSCODE_BRIDGE_LOADED=1
+  function _vscode_bridge_update_cwd() {
+    print -r -- "$PWD" > "${CWD_FILE}" 2>/dev/null
+  }
+  chpwd_functions+=(_vscode_bridge_update_cwd)
+  precmd_functions+=(_vscode_bridge_update_cwd)
+  trap '_vscode_bridge_update_cwd' WINCH
+  { while sleep 1; do kill -WINCH $$ 2>/dev/null || exit 0; done } &!
+fi
 ${CWD_HOOK_END}`;
 }
 
@@ -73,21 +77,13 @@ export async function daemonCommand(subcommand) {
 
       let existing = readZshrc();
 
-      if (hookIsInstalled(existing)) {
-        console.log('Daemon hook already installed in ~/.zshrc.');
-      } else {
-        existing = existing.trimEnd() + '\n\n' + buildHook(nodePath, scriptPath) + '\n';
-        console.log('Installed daemon hook in ~/.zshrc.');
-      }
-
-      if (cwdHookIsInstalled(existing)) {
-        console.log('CWD hook already installed in ~/.zshrc.');
-      } else {
-        existing = existing.trimEnd() + '\n\n' + buildCwdHook() + '\n';
-        console.log('Installed CWD hook in ~/.zshrc.');
-      }
-
+      // Always replace hooks to ensure they're current
+      if (hookIsInstalled(existing)) existing = removeBlock(existing, HOOK_START, HOOK_END);
+      if (cwdHookIsInstalled(existing)) existing = removeBlock(existing, CWD_HOOK_START, CWD_HOOK_END);
+      existing = existing.trimEnd() + '\n\n' + buildHook(nodePath, scriptPath) + '\n';
+      existing = existing.trimEnd() + '\n\n' + buildCwdHook() + '\n';
       fs.writeFileSync(ZSHRC_PATH, existing);
+      console.log('Installed hooks in ~/.zshrc.');
 
       if (isDaemonRunning()) {
         console.log('Daemon is already running.');
