@@ -1,88 +1,158 @@
-import { execSync } from 'child_process';
+import { execSync, spawnSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { startBridge } from './terminal-bridge.js';
+import { startBridge, CWD_FILE } from './terminal-bridge.js';
 
-const PLIST_LABEL = 'com.vscode-windows.daemon';
-const PLIST_PATH = path.join(os.homedir(), 'Library/LaunchAgents', `${PLIST_LABEL}.plist`);
 const LOG_PATH = path.join(os.homedir(), 'Library/Logs/vscode-windows-daemon.log');
+const ZSHRC_PATH = path.join(os.homedir(), '.zshrc');
+const PGREP_PATTERN = 'vscode-window-management.*daemon run';
 
-function buildPlist(binPath) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${PLIST_LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${binPath}</string>
-    <string>daemon</string>
-    <string>run</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>${LOG_PATH}</string>
-  <key>StandardErrorPath</key>
-  <string>${LOG_PATH}</string>
-</dict>
-</plist>`;
+// Daemon auto-start hook
+const HOOK_MARKER = 'vscode-windows-daemon-hook';
+const HOOK_START = `# ${HOOK_MARKER}-start`;
+const HOOK_END = `# ${HOOK_MARKER}-end`;
+
+// Shell CWD reporting hooks (writes CWD to file on cd, prompt, and tab switch)
+const CWD_HOOK_MARKER = 'vscode-windows-cwd-hook';
+const CWD_HOOK_START = `# ${CWD_HOOK_MARKER}-start`;
+const CWD_HOOK_END = `# ${CWD_HOOK_MARKER}-end`;
+
+function buildHook(nodePath, scriptPath) {
+  return `${HOOK_START}
+if ! pgrep -qf "${PGREP_PATTERN}" 2>/dev/null; then
+  nohup "${nodePath}" "${scriptPath}" daemon run >> "${LOG_PATH}" 2>&1 &
+fi
+${HOOK_END}`;
+}
+
+function buildCwdHook() {
+  return `${CWD_HOOK_START}
+function _vscode_bridge_update_cwd() {
+  echo "$(pwd)" > "${CWD_FILE}" 2>/dev/null
+}
+chpwd_functions+=(_vscode_bridge_update_cwd)
+precmd_functions+=(_vscode_bridge_update_cwd)
+trap '_vscode_bridge_update_cwd' WINCH
+${CWD_HOOK_END}`;
+}
+
+function readZshrc() {
+  if (!fs.existsSync(ZSHRC_PATH)) return '';
+  return fs.readFileSync(ZSHRC_PATH, 'utf-8');
+}
+
+function hookIsInstalled(content) {
+  return content.includes(HOOK_START);
+}
+
+function cwdHookIsInstalled(content) {
+  return content.includes(CWD_HOOK_START);
+}
+
+function removeBlock(content, start, end) {
+  const re = new RegExp(`\\n?${start}[\\s\\S]*?${end}\\n?`, 'g');
+  return content.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+}
+
+function isDaemonRunning() {
+  const result = spawnSync('pgrep', ['-qf', PGREP_PATTERN], { encoding: 'utf-8' });
+  return result.status === 0;
 }
 
 export async function daemonCommand(subcommand) {
   switch (subcommand) {
     case 'run':
       startBridge(500);
-      process.stdin.resume(); // keep process alive
+      setInterval(() => {}, 1 << 30);
       break;
 
     case 'start': {
-      const binPath = fs.realpathSync(process.argv[1]);
-      fs.mkdirSync(path.dirname(PLIST_PATH), { recursive: true });
-      fs.writeFileSync(PLIST_PATH, buildPlist(binPath));
-      const uid = process.getuid();
-      execSync(`launchctl bootstrap gui/${uid} "${PLIST_PATH}"`, { encoding: 'utf-8' });
-      console.log('Daemon installed and started.');
-      console.log('\nIf Terminal.app automation permission is needed, go to:');
-      console.log('System Settings → Privacy & Security → Automation → your terminal → Terminal.app ✓');
+      const nodePath = process.execPath;
+      const scriptPath = fs.realpathSync(process.argv[1]);
+
+      let existing = readZshrc();
+
+      if (hookIsInstalled(existing)) {
+        console.log('Daemon hook already installed in ~/.zshrc.');
+      } else {
+        existing = existing.trimEnd() + '\n\n' + buildHook(nodePath, scriptPath) + '\n';
+        console.log('Installed daemon hook in ~/.zshrc.');
+      }
+
+      if (cwdHookIsInstalled(existing)) {
+        console.log('CWD hook already installed in ~/.zshrc.');
+      } else {
+        existing = existing.trimEnd() + '\n\n' + buildCwdHook() + '\n';
+        console.log('Installed CWD hook in ~/.zshrc.');
+      }
+
+      fs.writeFileSync(ZSHRC_PATH, existing);
+
+      if (isDaemonRunning()) {
+        console.log('Daemon is already running.');
+      } else {
+        fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+        const child = spawn('sh', [
+          '-c',
+          `nohup "${nodePath}" "${scriptPath}" daemon run >> "${LOG_PATH}" 2>&1 &`,
+        ], { detached: true, stdio: 'ignore' });
+        child.unref();
+        await new Promise(r => setTimeout(r, 500));
+        console.log(isDaemonRunning() ? 'Daemon started.' : 'Daemon started (verifying in log).');
+      }
+
+      console.log(`\nAuto-starts on every new terminal session via ~/.zshrc.`);
+      console.log(`Log: ${LOG_PATH}`);
       break;
     }
 
     case 'stop': {
-      const uid = process.getuid();
       try {
-        execSync(`launchctl bootout gui/${uid} ${PLIST_LABEL}`, { encoding: 'utf-8' });
+        execSync(`pkill -f "${PGREP_PATTERN}"`, { encoding: 'utf-8' });
+        console.log('Daemon stopped.');
       } catch {
-        // may already be stopped; continue to remove plist
+        console.log('Daemon was not running.');
       }
-      if (fs.existsSync(PLIST_PATH)) {
-        fs.unlinkSync(PLIST_PATH);
+
+      let existing = readZshrc();
+      if (hookIsInstalled(existing)) {
+        existing = removeBlock(existing, HOOK_START, HOOK_END);
+        console.log('Removed daemon hook from ~/.zshrc.');
       }
-      console.log('Daemon stopped and uninstalled.');
+      if (cwdHookIsInstalled(existing)) {
+        existing = removeBlock(existing, CWD_HOOK_START, CWD_HOOK_END);
+        console.log('Removed CWD hook from ~/.zshrc.');
+      }
+      fs.writeFileSync(ZSHRC_PATH, existing);
       break;
     }
 
     case 'status': {
-      const uid = process.getuid();
-      try {
-        const out = execSync(`launchctl print gui/${uid}/${PLIST_LABEL}`, { encoding: 'utf-8' });
-        process.stdout.write(out);
-        console.log('\nStatus: running');
-      } catch {
-        console.log('Status: stopped (not loaded)');
+      if (isDaemonRunning()) {
+        const pid = execSync(`pgrep -f "${PGREP_PATTERN}"`, { encoding: 'utf-8' }).trim();
+        console.log(`Status: running (PID ${pid})`);
+      } else {
+        console.log('Status: stopped');
       }
+
+      const existing = readZshrc();
+      console.log(`Auto-start hook: ${hookIsInstalled(existing) ? 'installed' : 'not installed'}`);
+      console.log(`CWD hook: ${cwdHookIsInstalled(existing) ? 'installed' : 'not installed'}`);
+
+      if (fs.existsSync(CWD_FILE)) {
+        try {
+          const cwd = fs.readFileSync(CWD_FILE, 'utf-8').trim();
+          if (cwd) console.log(`Last reported CWD: ${cwd}`);
+        } catch { /* no cwd file yet */ }
+      }
+
       if (fs.existsSync(LOG_PATH)) {
         try {
           const logOut = execSync(`tail -20 "${LOG_PATH}"`, { encoding: 'utf-8' });
           console.log('\nRecent log output:');
           process.stdout.write(logOut);
-        } catch {
-          // no log content yet
-        }
+        } catch { /* no log content yet */ }
       }
       break;
     }
