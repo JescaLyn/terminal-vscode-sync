@@ -1,4 +1,5 @@
 import { listWindows } from './list-command.js';
+import { switchCommand } from './switch-command.js';
 
 export async function handleCommand(args) {
   if (args.length === 0) {
@@ -13,7 +14,12 @@ export async function handleCommand(args) {
       await listWindows();
       break;
     case 'switch':
-      console.log('switch command not yet implemented');
+      if (args.length < 2) {
+        console.error('Error: switch requires a window ID');
+        console.log('\nUsage: vscode-windows switch <window-id>');
+        process.exit(1);
+      }
+      await switchCommand(args[1]);
       break;
     default:
       console.log(`Unknown command: ${command}`);
