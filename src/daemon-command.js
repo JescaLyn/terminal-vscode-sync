@@ -27,16 +27,28 @@ ${HOOK_END}`;
 }
 
 function buildCwdHook() {
+  const activeFile = CWD_FILE + '.active';
   return `${CWD_HOOK_START}
 if [[ -z $_VSCODE_BRIDGE_LOADED ]]; then
   export _VSCODE_BRIDGE_LOADED=1
-  function _vscode_bridge_update_cwd() {
-    print -r -- "$PWD" > "${CWD_FILE}" 2>/dev/null
-  }
-  chpwd_functions+=(_vscode_bridge_update_cwd)
-  precmd_functions+=(_vscode_bridge_update_cwd)
-  trap '_vscode_bridge_update_cwd' WINCH
-  { while sleep 1; do kill -WINCH $$ 2>/dev/null || exit 0; done } &!
+  _vscode_bridge_ppid=$$
+  {
+    my_tty=$TTY
+    ppid=$_vscode_bridge_ppid
+    while sleep 0.5; do
+      kill -0 $ppid 2>/dev/null || exit 0
+      active=$(osascript -e 'tell application "Terminal" to get tty of selected tab of front window' 2>/dev/null)
+      [[ -z $active ]] && continue
+      if [[ $active == $my_tty ]]; then
+        prev=$(cat "${activeFile}" 2>/dev/null)
+        if [[ $prev != $my_tty ]]; then
+          parent_cwd=$(lsof -a -p $ppid -d cwd -F n 2>/dev/null | awk '/^n/{print substr($0,2); exit}')
+          [[ -n $parent_cwd ]] && print -r -- "$parent_cwd" > "${CWD_FILE}"
+          print -r -- "$my_tty" > "${activeFile}"
+        fi
+      fi
+    done
+  } &!
 fi
 ${CWD_HOOK_END}`;
 }
