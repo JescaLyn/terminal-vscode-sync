@@ -10,21 +10,13 @@ describe('Window Switcher', () => {
 
   it('should throw on non-darwin platforms', async () => {
     if (os.platform() === 'darwin') {
-      // On macOS, focusWindow calls the code CLI which requires real paths
+      // On macOS, focusWindow calls the open command which requires real paths
       // Skip actual execution test; behavior tested manually
       return;
     }
     await assert.rejects(
       () => focusWindow('/some/path'),
       /only supports macOS/
-    );
-  });
-
-  it('should throw when code CLI is not found', async () => {
-    if (os.platform() !== 'darwin') return;
-    await assert.rejects(
-      () => focusWindow('/some/path', { codeCli: null }),
-      /VSCode "code" CLI not found/
     );
   });
 });
