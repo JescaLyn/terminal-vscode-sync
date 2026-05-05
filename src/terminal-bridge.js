@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { discoverVSCodeInstances } from './vscode-discovery.js';
-import { focusWindow } from './window-switcher.js';
+import { focusWindow, returnFocusToTerminal } from './window-switcher.js';
 
 export const CWD_FILE = path.join(os.homedir(), '.vscode-bridge-cwd');
 
@@ -45,6 +45,13 @@ export function startBridge(intervalMs = 500) {
     } catch (err) {
       process.stderr.write(`focusWindow failed: ${err.message}\n`);
       lastCwd = null;
+      return;
+    }
+
+    try {
+      await returnFocusToTerminal();
+    } catch (err) {
+      process.stderr.write(`returnFocusToTerminal failed: ${err.message}\n`);
     }
   }, intervalMs);
 }

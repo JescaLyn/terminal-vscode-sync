@@ -15,3 +15,20 @@ export async function focusWindow(folderPath) {
     child.on('error', reject);
   });
 }
+
+export async function returnFocusToTerminal(delayMs = 1000) {
+  if (os.platform() !== 'darwin') {
+    throw new Error('Window switching currently only supports macOS');
+  }
+
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      const child = spawn('open', ['-a', 'Terminal'], { stdio: 'ignore' });
+      child.on('close', (code) => {
+        if (code !== 0) reject(new Error(`open returned focus failed with exit ${code}`));
+        else resolve();
+      });
+      child.on('error', reject);
+    }, delayMs);
+  });
+}
