@@ -23,3 +23,25 @@ Build a lightweight daemon that:
 4. **Workspace storage introspection** — reads VSCode's internal workspace metadata, no CLI overhead
 5. **Launch Services focusing** — uses `open -a` to avoid Electron window cycling; requires VSCode setting `window.openFoldersInNewWindow: "off"`
 6. **Return focus to Terminal** — automatically reactivates Terminal after VSCode focus so user can continue in Terminal
+
+## Session Status (Latest)
+
+### Completed:
+- ✅ Project renamed from `vscode-window-management` to `terminal-vscode-sync`
+- ✅ All references updated (package.json, bin command, daemon pattern, log paths, help text)
+- ✅ Terminal reactivation feature: 1-second delay after VSCode focus before returning to Terminal
+- ✅ Hook marker migration logic added (cleans up old markers when upgrading)
+- ✅ Code review completed, all stale references fixed
+- ✅ README updated with critical prerequisite: "projects must be open in VSCode beforehand"
+- ✅ All 11 tests passing
+- ✅ Project moved to `/terminal-vscode-sync`
+- ✅ Ready for public release
+
+### Architecture is stable:
+- Daemon runs as background Node.js process
+- zsh shell hooks detect tab switches via osascript polling
+- CWD passed via file (`~/.vscode-bridge-cwd`), not IPC
+- Window discovery reads VSCode workspace storage
+- Focusing uses `open -a` (no cycling, no new windows with setting off)
+
+### No known bugs or TODOs
