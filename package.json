@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "type": "module",
   "bin": {
+    "tvs": "src/index.js",
     "terminal-vscode-sync": "src/index.js"
   },
   "directories": {

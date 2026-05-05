@@ -10,7 +10,7 @@ Build a lightweight daemon that:
 1. **Monitors Terminal tab switches** — shell hook detects when the active Terminal tab changes
 2. **Discovers VSCode windows** — reads VSCode workspace storage metadata (no permissions needed)
 3. **Matches by working directory** — uses longest-prefix matching to find the VSCode window with the current directory
-4. **Focuses the window** — uses `open -a` to bring the matching window to foreground
+4. **Focuses the window** — uses `osascript` (System Events, AXRaise) to raise the matching window by title
 5. **Returns focus to Terminal** — reactivates Terminal so you can continue working
 
 **Architecture:** macOS-only daemon with zsh shell hooks. No Accessibility/Automation permissions required for core functionality (Terminal.app permission is requested on first use, similar to other automation tools).
@@ -21,7 +21,7 @@ Build a lightweight daemon that:
 2. **Shell hook detection** — zsh background loop polls Terminal tab via osascript, avoids SIGWINCH unreliability
 3. **File-based signaling** — `~/.vscode-bridge-cwd` file passes CWD from shell to daemon, avoids IPC complexity
 4. **Workspace storage introspection** — reads VSCode's internal workspace metadata, no CLI overhead
-5. **Launch Services focusing** — uses `open -a` to avoid Electron window cycling; requires VSCode setting `window.openFoldersInNewWindow: "off"`
+5. **Accessibility focusing** — uses `osascript` + `AXRaise` via System Events; requires Accessibility permission for the calling process
 6. **Return focus to Terminal** — automatically reactivates Terminal after VSCode focus so user can continue in Terminal
 
 ## Session Status (Latest)
@@ -42,6 +42,6 @@ Build a lightweight daemon that:
 - zsh shell hooks detect tab switches via osascript polling
 - CWD passed via file (`~/.vscode-bridge-cwd`), not IPC
 - Window discovery reads VSCode workspace storage
-- Focusing uses `open -a` (no cycling, no new windows with setting off)
+- Focusing uses `osascript` + `AXRaise` (matches VSCode window by folder name in title; requires Accessibility permission)
 
 ### No known bugs or TODOs

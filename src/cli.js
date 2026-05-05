@@ -17,7 +17,7 @@ export async function handleCommand(args) {
     case 'switch':
       if (args.length < 2) {
         console.error('Error: switch requires a window ID');
-        console.log('\nUsage: terminal-vscode-sync switch <id>');
+        console.log('\nUsage: tvs switch <id>');
         process.exit(1);
       }
       await switchCommand(args[1]);
@@ -25,7 +25,7 @@ export async function handleCommand(args) {
     case 'daemon':
       if (args.length < 2) {
         console.error('Error: daemon requires a subcommand');
-        console.log('\nUsage: terminal-vscode-sync daemon <run|start|stop|status>');
+        console.log('\nUsage: tvs daemon <run|start|stop|status>');
         process.exit(1);
       }
       await daemonCommand(args[1]);
@@ -37,10 +37,10 @@ export async function handleCommand(args) {
 }
 
 function showHelp() {
-  console.log(`terminal-vscode-sync - Auto-switch VSCode windows when you switch Terminal tabs
+  console.log(`tvs - Auto-switch VSCode windows when you switch Terminal tabs
 
 Usage:
-  terminal-vscode-sync [command]
+  tvs [command]
 
 Commands:
   list                 List all open VSCode windows
@@ -52,7 +52,7 @@ Commands:
   help                 Show this help message
 
 Examples:
-  terminal-vscode-sync list
-  terminal-vscode-sync daemon start
+  tvs list
+  tvs daemon start
 `);
 }

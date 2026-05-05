@@ -14,7 +14,7 @@ describe('Window Switcher', () => {
 
   it('should throw on non-darwin platforms', async () => {
     if (os.platform() === 'darwin') {
-      // On macOS, focusWindow calls the open command which requires real paths
+      // On macOS, focusWindow uses osascript to focus by window title
       // Skip actual execution test; behavior tested manually
       return;
     }
