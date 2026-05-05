@@ -1,123 +1,100 @@
 # VSCode Window Manager
 
-CLI tool to quickly list and switch between open VSCode windows on macOS.
+Auto-switch VSCode windows when you switch Terminal tabs. No clicking — just change tabs and the right window focuses automatically.
 
 ## Installation
 
 ```bash
 npm install -g .
+vscode-windows daemon start
 ```
 
-After installation, the `vscode-windows` command will be available in your terminal.
+The daemon installs itself in your `~/.zshrc` and auto-starts on every new shell session.
+
+## Setup
+
+Add this setting to your VSCode `settings.json` to prevent opening new workspace windows:
+
+```json
+"window.openFoldersInNewWindow": "off"
+```
+
+This ensures the daemon focuses existing windows instead of creating new ones.
 
 ## Usage
 
-### Display help and available commands
+Once installed and configured, the Terminal bridge daemon runs automatically. Switch Terminal tabs and the matching VSCode window focuses within ~0.5 seconds.
+
+### Daemon commands
 
 ```bash
-vscode-windows
-```
-
-Output:
-```
-vscode-windows - Manage and switch between VSCode windows
-
-Usage:
-  vscode-windows [command]
-
-Commands:
-  list       List all open VSCode windows
-  switch     Switch to a specific VSCode window
-  help       Show this help message
-
-Examples:
-  vscode-windows list
-  vscode-windows switch <project-name>
-```
-
-### List all open VSCode windows
-
-```bash
-vscode-windows list
-```
-
-Output (when windows are open):
-```
-Open VSCode Windows:
-
-ID                  | Title
---------------------|---------------------------------
-vscode-0            | my-project
-vscode-1            | another-project
-vscode-2            | docs
-```
-
-Output (when no windows are open):
-```
-No open VSCode windows found
-```
-
-### Switch to a window
-
-```bash
-vscode-windows switch vscode-0
-```
-
-This brings the specified VSCode window to the foreground on macOS.
-
-If the window ID is invalid:
-```bash
-vscode-windows switch invalid-id
-```
-
-Output:
-```
-Error: Window ID "invalid-id" not found
-
-Available windows:
-  vscode-0 - my-project
-  vscode-1 - another-project
+vscode-windows daemon status          # Check daemon status and CWD
+vscode-windows daemon stop            # Stop daemon and remove hooks
+vscode-windows daemon start           # Start daemon
+vscode-windows list                   # List all open VSCode windows
+vscode-windows switch <window-id>     # Manually switch to a window
 ```
 
 ## How it works
 
-The tool discovers open VSCode windows by:
-1. Querying the macOS system using AppleScript via `osascript`
-2. Parsing VSCode window titles to extract project names
-3. Assigning each window a unique ID for quick reference
+1. **Shell hook** — Every Terminal tab runs a background loop that:
+   - Polls the active Terminal tab every 0.5s via `osascript`
+   - Reads the parent shell's working directory via `lsof`
+   - Writes the CWD to `~/.vscode-bridge-cwd` when the active tab changes
 
-When you run `vscode-windows switch <id>`, it uses AppleScript to focus the target window, bringing it to the foreground.
+2. **Daemon** — Node.js daemon monitors `~/.vscode-bridge-cwd`:
+   - Discovers open VSCode windows by reading their workspace storage
+   - Matches CWD to VSCode windows using prefix matching (longest match wins, supports subdirectories)
+   - Focuses the matching window via `open -a "Visual Studio Code" <folder>`
 
-## Configuration (Future)
+3. **No spurious triggers** — Only switches when the Terminal tab actually changes, not on every command or `cd`.
 
-Future versions will support `~/.vscode-windows.json` for custom project-to-name mappings and cross-platform support.
+## Requirements
+
+- macOS (uses `osascript`, `lsof`, `open` command)
+- zsh shell (uses zsh-specific syntax for background job management)
+- Node.js 18+
+- VSCode setting: `window.openFoldersInNewWindow: "off"`
+- Terminal.app automation permission (granted automatically on first use, or manually in System Settings → Privacy & Security → Automation)
+
+## Troubleshooting
+
+**New VSCode windows keep opening:**
+- Verify you set `window.openFoldersInNewWindow: "off"` in VSCode settings
+- Check daemon is running: `vscode-windows daemon status`
+
+**Windows not switching on tab change:**
+- Verify daemon is running: `pgrep -f "vscode-window-management.*daemon run"`
+- Check daemon logs: `tail -20 ~/Library/Logs/vscode-windows-daemon.log`
+- Reload shell hooks in your Terminal tabs: `unset _VSCODE_BRIDGE_LOADED && source ~/.zshrc`
+
+**Terminal.app permission denied:**
+- Grant permission in System Settings → Privacy & Security → Automation → Terminal.app
 
 ## Development
 
-Run the test suite:
+Run tests:
 
 ```bash
 npm test
 ```
 
-Expected output: All 6 tests pass
-- 3 config module tests
-- 2 VSCode discovery tests  
-- 1 window switcher test
+Expected: 11 tests pass (4 suites: Config, CWD, Discovery, Window Switcher)
 
-See [CLAUDE.md](./CLAUDE.md) for architecture, design decisions, and development notes.
+See [CLAUDE.md](./CLAUDE.md) for architecture and design decisions.
 
 ## Status
 
-MVP complete. Core features implemented:
-- ✅ Discover open VSCode windows
-- ✅ List windows with IDs and titles
-- ✅ Switch to windows by ID
-- ✅ Error handling for invalid IDs
+Terminal bridge daemon implemented and working:
+- ✅ Auto-switch on Terminal tab change
+- ✅ Discover VSCode windows from workspace storage
+- ✅ Match by working directory with prefix matching
+- ✅ Focus windows without cycling through all of them
+- ✅ No spurious triggers (only on actual tab switches)
 - ✅ Full test coverage
 
-Next steps (future):
-- Terminal bridge integration
-- Electron/GUI wrapper
-- Cross-platform support (Linux, Windows)
-- Workspace config file support
+## Known limitations
+
+- macOS only (uses `osascript` and Launch Services)
+- zsh only (shell hooks use zsh-specific syntax)
+- Requires VSCode setting to prevent new workspace windows
