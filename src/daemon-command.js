@@ -4,9 +4,9 @@ import path from 'path';
 import os from 'os';
 import { startBridge, CWD_FILE } from './terminal-bridge.js';
 
-const LOG_PATH = path.join(os.homedir(), 'Library/Logs/vscode-windows-daemon.log');
+const LOG_PATH = path.join(os.homedir(), 'Library/Logs/terminal-vscode-sync-daemon.log');
 const ZSHRC_PATH = path.join(os.homedir(), '.zshrc');
-const PGREP_PATTERN = 'vscode-window-management.*daemon run';
+const PGREP_PATTERN = 'terminal-vscode-sync.*daemon run';
 
 // Daemon auto-start hook
 const HOOK_MARKER = 'vscode-windows-daemon-hook';
@@ -45,6 +45,7 @@ if [[ -z $_VSCODE_BRIDGE_LOADED ]]; then
           parent_cwd=$(lsof -a -p $ppid -d cwd -F n 2>/dev/null | awk '/^n/{print substr($0,2); exit}')
           [[ -n $parent_cwd ]] && print -r -- "$parent_cwd" > "${CWD_FILE}"
           print -r -- "$my_tty" > "${activeFile}"
+          { sleep 1; osascript -e 'tell application "Terminal" to activate' 2>/dev/null; } > /dev/null 2>&1 &
         fi
       fi
     done
@@ -89,7 +90,18 @@ export async function daemonCommand(subcommand) {
 
       let existing = readZshrc();
 
-      // Always replace hooks to ensure they're current
+      // Migration: remove old hook markers from vscode-window-management (if upgrading from old version)
+      const oldHookMarkers = [
+        '# vscode-windows-daemon-hook-start',
+        '# vscode-windows-daemon-hook-end',
+        '# vscode-windows-cwd-hook-start',
+        '# vscode-windows-cwd-hook-end',
+      ];
+      for (const [start, end] of [[oldHookMarkers[0], oldHookMarkers[1]], [oldHookMarkers[2], oldHookMarkers[3]]]) {
+        if (existing.includes(start)) existing = removeBlock(existing, start, end);
+      }
+
+      // Always replace current hooks to ensure they're current
       if (hookIsInstalled(existing)) existing = removeBlock(existing, HOOK_START, HOOK_END);
       if (cwdHookIsInstalled(existing)) existing = removeBlock(existing, CWD_HOOK_START, CWD_HOOK_END);
       existing = existing.trimEnd() + '\n\n' + buildHook(nodePath, scriptPath) + '\n';
@@ -167,7 +179,7 @@ export async function daemonCommand(subcommand) {
 
     default:
       console.error(`Unknown daemon subcommand: ${subcommand}`);
-      console.log('Usage: vscode-windows daemon <run|start|stop|status>');
+      console.log('Usage: terminal-vscode-sync daemon <run|start|stop|status>');
       process.exit(1);
   }
 }

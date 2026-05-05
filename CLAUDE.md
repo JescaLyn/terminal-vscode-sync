@@ -1,42 +1,25 @@
-# VSCode Window Management
+# Terminal VSCode Sync
 
 ## Problem
 
-Managing multiple VSCode windows across projects is tedious — no built-in switcher exists, and losing track of which window belongs to which project wastes context-switching time. This tool provides a simple UI to list, organize, and quickly switch between open VSCode windows. Bonus: if we can hook into Terminal tab switching, opening a Terminal tab in a specific project automatically switches the VSCode window to that project's workspace.
+Switching between multiple VSCode windows across projects requires context-switching and manual window management. This tool automates it: switch a Terminal tab and the matching VSCode window focuses automatically within ~0.5 seconds.
 
 ## Approach
 
-Build a lightweight desktop/CLI application that:
-1. **Discovers open VSCode instances** — query VSCode's workspace storage database (no permissions needed) by using `lsof` to find active workspace directories
-2. **Provides a switcher UI** — macOS CLI tool that lists open windows and switches between them
-3. **Switches windows** — use VSCode's `code <path>` CLI to focus a window by folder path
-4. **Optional Terminal bridge** — intercept Terminal tab changes and trigger window switch if tab name matches a known project
+Build a lightweight daemon that:
+1. **Monitors Terminal tab switches** — shell hook detects when the active Terminal tab changes
+2. **Discovers VSCode windows** — reads VSCode workspace storage metadata (no permissions needed)
+3. **Matches by working directory** — uses longest-prefix matching to find the VSCode window with the current directory
+4. **Focuses the window** — uses `open -a` to bring the matching window to foreground
+5. **Returns focus to Terminal** — reactivates Terminal so you can continue working
 
-**Advantage of this approach:** No macOS Accessibility/Automation permissions required. Works by reading VSCode's internal workspace metadata and invoking the VSCode CLI, which is reliable and cross-platform-friendly.
-
-**Tradeoff:** MVP uses CLI (fastest validation). Terminal bridge deferred. Electron UI deferred unless CLI proves insufficient.
-
-## Open Questions
-
-- How are VSCode workspaces identified? (folder path, workspace file, window title, remote-ssh host?)
-- Should this run as a daemon or on-demand?
-- Where should window/workspace mappings live? (JSON config file, VSCode settings, external registry?)
-- Terminal tab matching strategy — by project folder name, by custom tags, or regex pattern?
-- Platform priority — macOS first, or cross-platform from the start?
+**Architecture:** macOS-only daemon with zsh shell hooks. No Accessibility/Automation permissions required for core functionality (Terminal.app permission is requested on first use, similar to other automation tools).
 
 ## Key Decisions
 
-1. **Start with Node.js + CLI** — aligns with VSCode's native stack, fast iteration, easy distribution as VSCode extension or standalone tool
-2. **Use workspace storage introspection** — read VSCode's internal workspace metadata from `~/Library/Application Support/Code/User/workspaceStorage` via `lsof`, avoiding permission prompts entirely
-3. **Local config file** — store workspace-to-project mappings in `.vscode-windows.json` in home directory; human-editable, portable (future enhancement)
-4. **Defer Electron UI** — validate CLI works first, then wrap in tray/menu if needed
-
-## First Step
-
-Create a minimal Node.js CLI that:
-- Discovers open VSCode instances by reading workspace storage metadata (no permissions needed)
-- Lists available windows with folder paths via `vscode-windows list`
-- Switches windows by folder path via `vscode-windows switch <folder-name>`
-- Provides error messages for invalid window IDs
-
-MVP validates that discovery and switching work end-to-end. Terminal integration and GUI wrapper deferred.
+1. **Daemon architecture** — background Node.js process monitors and reacts to CWD changes
+2. **Shell hook detection** — zsh background loop polls Terminal tab via osascript, avoids SIGWINCH unreliability
+3. **File-based signaling** — `~/.vscode-bridge-cwd` file passes CWD from shell to daemon, avoids IPC complexity
+4. **Workspace storage introspection** — reads VSCode's internal workspace metadata, no CLI overhead
+5. **Launch Services focusing** — uses `open -a` to avoid Electron window cycling; requires VSCode setting `window.openFoldersInNewWindow: "off"`
+6. **Return focus to Terminal** — automatically reactivates Terminal after VSCode focus so user can continue in Terminal

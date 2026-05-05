@@ -1,4 +1,4 @@
-# VSCode Window Manager
+# Terminal VSCode Sync
 
 Auto-switch VSCode windows when you switch Terminal tabs. No clicking — just change tabs and the right window focuses automatically.
 
@@ -6,12 +6,14 @@ Auto-switch VSCode windows when you switch Terminal tabs. No clicking — just c
 
 ```bash
 npm install -g .
-vscode-windows daemon start
+terminal-vscode-sync daemon start
 ```
 
 The daemon installs itself in your `~/.zshrc` and auto-starts on every new shell session.
 
 ## Setup
+
+### VSCode Setting
 
 Add this setting to your VSCode `settings.json` to prevent opening new workspace windows:
 
@@ -21,6 +23,10 @@ Add this setting to your VSCode `settings.json` to prevent opening new workspace
 
 This ensures the daemon focuses existing windows instead of creating new ones.
 
+### Important: Open Projects in VSCode First
+
+**The daemon switches between existing VSCode windows — it does not create new ones.** You must manually open each project folder in VSCode before the daemon can switch to it. Once open, switching Terminal tabs will automatically focus the matching VSCode window.
+
 ## Usage
 
 Once installed and configured, the Terminal bridge daemon runs automatically. Switch Terminal tabs and the matching VSCode window focuses within ~0.5 seconds.
@@ -28,11 +34,11 @@ Once installed and configured, the Terminal bridge daemon runs automatically. Sw
 ### Daemon commands
 
 ```bash
-vscode-windows daemon status          # Check daemon status and CWD
-vscode-windows daemon stop            # Stop daemon and remove hooks
-vscode-windows daemon start           # Start daemon
-vscode-windows list                   # List all open VSCode windows
-vscode-windows switch <window-id>     # Manually switch to a window
+terminal-vscode-sync daemon status    # Check daemon status and CWD
+terminal-vscode-sync daemon stop      # Stop daemon and remove hooks
+terminal-vscode-sync daemon start     # Start daemon
+terminal-vscode-sync list             # List all open VSCode windows
+terminal-vscode-sync switch <id>      # Manually switch to a window
 ```
 
 ## How it works
@@ -61,11 +67,11 @@ vscode-windows switch <window-id>     # Manually switch to a window
 
 **New VSCode windows keep opening:**
 - Verify you set `window.openFoldersInNewWindow: "off"` in VSCode settings
-- Check daemon is running: `vscode-windows daemon status`
+- Check daemon is running: `terminal-vscode-sync daemon status`
 
 **Windows not switching on tab change:**
-- Verify daemon is running: `pgrep -f "vscode-window-management.*daemon run"`
-- Check daemon logs: `tail -20 ~/Library/Logs/vscode-windows-daemon.log`
+- Verify daemon is running: `pgrep -f "terminal-vscode-sync.*daemon run"`
+- Check daemon logs: `tail -20 ~/Library/Logs/terminal-vscode-sync-daemon.log`
 - Reload shell hooks in your Terminal tabs: `unset _VSCODE_BRIDGE_LOADED && source ~/.zshrc`
 
 **Terminal.app permission denied:**

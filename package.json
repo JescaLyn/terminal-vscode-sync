@@ -1,11 +1,11 @@
 {
-  "name": "vscode-window-management",
+  "name": "terminal-vscode-sync",
   "version": "1.0.0",
-  "description": "A simple UI for managing multiple VSCode windows and easily switching between them. When possible, switching a Terminal tab automatically switches the VSCode window to the matching project.",
+  "description": "Auto-switch VSCode windows when you switch Terminal tabs. Switch tabs and the matching VSCode window focuses automatically.",
   "main": "src/index.js",
   "type": "module",
   "bin": {
-    "vscode-windows": "src/index.js"
+    "terminal-vscode-sync": "src/index.js"
   },
   "directories": {
     "doc": "docs"
