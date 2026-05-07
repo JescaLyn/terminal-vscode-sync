@@ -27,25 +27,21 @@ ${HOOK_END}`;
 }
 
 function buildCwdHook() {
-  const activeFile = CWD_FILE + '.active';
   return `${CWD_HOOK_START}
-if [[ -z $_VSCODE_BRIDGE_LOADED ]]; then
-  export _VSCODE_BRIDGE_LOADED=1
-  _vscode_bridge_ppid=$$
+# Guard using shell PID — each shell instance (including after exec zsh) runs its own monitor
+if [[ -z \${_VSCODE_BRIDGE_PID} || \${_VSCODE_BRIDGE_PID} != $$ ]]; then
+  export _VSCODE_BRIDGE_PID=$$
   {
-    my_tty=$TTY
-    ppid=$_vscode_bridge_ppid
+    prev_tty=""
     while sleep 0.5; do
-      kill -0 $ppid 2>/dev/null || exit 0
       active=$(osascript -e 'tell application "Terminal" to get tty of selected tab of front window' 2>/dev/null)
-      [[ -z $active ]] && continue
-      if [[ $active == $my_tty ]]; then
-        prev=$(cat "${activeFile}" 2>/dev/null)
-        if [[ $prev != $my_tty ]]; then
-          parent_cwd=$(lsof -a -p $ppid -d cwd -F n 2>/dev/null | awk '/^n/{print substr($0,2); exit}')
-          [[ -n $parent_cwd ]] && print -r -- "$parent_cwd" > "${CWD_FILE}"
-          print -r -- "$my_tty" > "${activeFile}"
-          { sleep 1; osascript -e 'tell application "Terminal" to activate' 2>/dev/null; } > /dev/null 2>&1 &
+      [[ $active != /dev/* ]] && continue
+      if [[ $active != $prev_tty ]]; then
+        prev_tty=$active
+        shell_pid=$(lsof 2>/dev/null | grep "$active\$" | awk '{print $2}' | sort -u | head -1)
+        if [[ -n $shell_pid ]]; then
+          target_cwd=$(lsof -a -p $shell_pid -d cwd -F n 2>/dev/null | awk '/^n/{print substr($0,2); exit}')
+          [[ -n $target_cwd ]] && print -r -- "$target_cwd" > "${CWD_FILE}"
         fi
       fi
     done

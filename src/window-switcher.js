@@ -31,8 +31,10 @@ end tell`;
     let stderr = '';
     child.stderr.on('data', (d) => { stderr += d; });
     child.on('close', (code) => {
-      if (code !== 0) reject(new Error(`osascript exited with ${code}: ${stderr.trim()}`));
-      else resolve();
+      if (code !== 0) {
+        const fullError = stderr.trim() || `(no stderr output)`;
+        reject(new Error(`osascript exited with ${code}: ${fullError}\nScript:\n${script}`));
+      } else resolve();
     });
     child.on('error', reject);
   });
