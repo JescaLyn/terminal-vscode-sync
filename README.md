@@ -2,7 +2,7 @@
 
 Switch a Terminal tab — the matching VSCode window focuses automatically. No clicking.
 
-**Stack:** macOS · Terminal.app · zsh · VS Code
+**Stack:** macOS · Terminal.app · zsh · VSCode
 
 ---
 
@@ -13,9 +13,9 @@ npm install -g .
 tvs daemon start
 ```
 
-Open each project folder in VS Code first, then start switching Terminal tabs. The matching window will focus within ~0.5 seconds.
+Open each project folder in VSCode first, then start switching Terminal tabs. The matching window will focus within ~0.5 seconds.
 
-> **Note:** The daemon switches between _existing_ VS Code windows — it does not open new ones.
+> **Note:** The daemon switches between _existing_ VSCode windows — it does not open new ones.
 
 ## Quick Restart
 
@@ -42,8 +42,8 @@ Open each project folder in VS Code first, then start switching Terminal tabs. T
 tvs daemon start     # Install hooks in ~/.zshrc and start daemon
 tvs daemon stop      # Stop daemon and remove hooks from ~/.zshrc
 tvs daemon status    # Show daemon status, last known CWD, and recent logs
-tvs list             # List all open VS Code windows
-tvs switch <id>      # Manually focus a specific VS Code window
+tvs list             # List all open VSCode windows
+tvs switch <id>      # Manually focus a specific VSCode window
 ```
 
 ---
@@ -52,7 +52,7 @@ tvs switch <id>      # Manually focus a specific VS Code window
 
 1. **Shell hook** (installed in `~/.zshrc`): each Terminal tab runs a background loop that polls Terminal.app every 0.5s for the active tab's TTY. When the active tab changes, it finds the shell process on that TTY via `lsof` and writes its CWD to `~/.vscode-bridge-cwd`.
 
-2. **Daemon**: a background Node.js process watches `~/.vscode-bridge-cwd`. On change, it reads VS Code's workspace storage metadata to discover open windows, matches the CWD using longest-prefix matching, focuses the matching window via `osascript` (AXRaise), then returns focus to Terminal.
+2. **Daemon**: a background Node.js process watches `~/.vscode-bridge-cwd`. On change, it reads VSCode's workspace storage metadata to discover open windows, matches the CWD using longest-prefix matching, focuses the matching window via `osascript` (AXRaise), then returns focus to Terminal.
 
 3. **No spurious triggers**: the hook only writes when the active tab _changes_, not on every command or `cd`.
 
