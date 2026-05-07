@@ -17,6 +17,12 @@ Open each project folder in VS Code first, then start switching Terminal tabs. T
 
 > **Note:** The daemon switches between _existing_ VS Code windows — it does not open new ones.
 
+## Quick Restart
+
+**After shutdown/restart:** The daemon doesn't survive a reboot. Open any new Terminal tab after logging back in — the `~/.zshrc` hook restarts it automatically.
+
+**After sleep/wake:** The daemon usually survives. If switching stops working, open a new terminal tab or run `tvs daemon start`.
+
 ---
 
 ## Requirements

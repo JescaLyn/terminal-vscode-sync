@@ -15,8 +15,9 @@ dist/
 build/
 *.egg-info/
 
-# Generated (scaffolding artifacts, not design docs)
-docs/superpowers/plans/
+# Project-internal (not for public consumption)
+.claude/
+docs/superpowers/
 
-# Local Claude Code session settings (permissions, etc.)
-.claude/settings.local.json
+# Runtime data (lives at ~/.vscode-windows.json, not in the repo)
+.vscode-windows.json
