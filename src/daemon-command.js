@@ -13,7 +13,7 @@ const HOOK_MARKER = 'vscode-windows-daemon-hook';
 const HOOK_START = `# ${HOOK_MARKER}-start`;
 const HOOK_END = `# ${HOOK_MARKER}-end`;
 
-// Shell CWD reporting hooks (writes CWD to file on cd, prompt, and tab switch)
+// Shell CWD reporting hooks (writes CWD to file on tab switch; daemon handles VSCode focus and Terminal refocus)
 const CWD_HOOK_MARKER = 'vscode-windows-cwd-hook';
 const CWD_HOOK_START = `# ${CWD_HOOK_MARKER}-start`;
 const CWD_HOOK_END = `# ${CWD_HOOK_MARKER}-end`;
@@ -32,13 +32,15 @@ function buildCwdHook() {
 if [[ -z \${_VSCODE_BRIDGE_PID} || \${_VSCODE_BRIDGE_PID} != $$ ]]; then
   export _VSCODE_BRIDGE_PID=$$
   {
+    owner_pid=$$
     prev_tty=""
     while sleep 0.5; do
+      kill -0 $owner_pid 2>/dev/null || exit 0
       active=$(osascript -e 'tell application "Terminal" to get tty of selected tab of front window' 2>/dev/null)
       [[ $active != /dev/* ]] && continue
       if [[ $active != $prev_tty ]]; then
         prev_tty=$active
-        shell_pid=$(lsof 2>/dev/null | grep "$active\$" | awk '{print $2}' | sort -u | head -1)
+        shell_pid=$(lsof 2>/dev/null | grep "$active\$" | awk '$1 ~ /^(zsh|bash|fish|sh)$/ {print $2}' | sort -n | tail -1)
         if [[ -n $shell_pid ]]; then
           target_cwd=$(lsof -a -p $shell_pid -d cwd -F n 2>/dev/null | awk '/^n/{print substr($0,2); exit}')
           [[ -n $target_cwd ]] && print -r -- "$target_cwd" > "${CWD_FILE}"
@@ -85,17 +87,6 @@ export async function daemonCommand(subcommand) {
       const scriptPath = fs.realpathSync(process.argv[1]);
 
       let existing = readZshrc();
-
-      // Migration: remove old hook markers from vscode-window-management (if upgrading from old version)
-      const oldHookMarkers = [
-        '# vscode-windows-daemon-hook-start',
-        '# vscode-windows-daemon-hook-end',
-        '# vscode-windows-cwd-hook-start',
-        '# vscode-windows-cwd-hook-end',
-      ];
-      for (const [start, end] of [[oldHookMarkers[0], oldHookMarkers[1]], [oldHookMarkers[2], oldHookMarkers[3]]]) {
-        if (existing.includes(start)) existing = removeBlock(existing, start, end);
-      }
 
       // Always replace current hooks to ensure they're current
       if (hookIsInstalled(existing)) existing = removeBlock(existing, HOOK_START, HOOK_END);

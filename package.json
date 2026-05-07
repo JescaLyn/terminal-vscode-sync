@@ -1,7 +1,7 @@
 {
   "name": "terminal-vscode-sync",
   "version": "1.0.0",
-  "description": "Auto-switch VSCode windows when you switch Terminal tabs. Switch tabs and the matching VSCode window focuses automatically.",
+  "description": "Switch a Terminal tab — the matching VS Code window focuses automatically. macOS, Terminal.app, zsh.",
   "main": "src/index.js",
   "type": "module",
   "bin": {
@@ -14,7 +14,7 @@
   "scripts": {
     "test": "node --test tests/**/*.test.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["vscode", "terminal", "macos", "window-management", "developer-tools"],
+  "author": "JescaLyn",
   "license": "ISC"
 }

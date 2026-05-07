@@ -1,94 +1,83 @@
 # Terminal VSCode Sync
 
-Auto-switch VSCode windows when you switch Terminal tabs. No clicking — just change tabs and the right window focuses automatically.
+Switch a Terminal tab — the matching VSCode window focuses automatically. No clicking.
 
-## Installation
+**Stack:** macOS · Terminal.app · zsh · VS Code
+
+---
+
+## Quick Start
 
 ```bash
 npm install -g .
 tvs daemon start
 ```
 
-The daemon installs itself in your `~/.zshrc` and auto-starts on every new shell session.
+Open each project folder in VS Code first, then start switching Terminal tabs. The matching window will focus within ~0.5 seconds.
 
-## Setup
+> **Note:** The daemon switches between _existing_ VS Code windows — it does not open new ones.
 
-### Important: Open Projects in VSCode First
-
-**The daemon switches between existing VSCode windows — it does not create new ones.** You must manually open each project folder in VSCode before the daemon can switch to it. Once open, switching Terminal tabs will automatically focus the matching VSCode window.
-
-## Usage
-
-Once installed and configured, the Terminal bridge daemon runs automatically. Switch Terminal tabs and the matching VSCode window focuses within ~0.5 seconds.
-
-### Daemon commands
-
-```bash
-tvs daemon status    # Check daemon status and CWD
-tvs daemon stop      # Stop daemon and remove hooks
-tvs daemon start     # Start daemon
-tvs list             # List all open VSCode windows
-tvs switch <id>      # Manually switch to a window
-```
-
-## How it works
-
-1. **Shell hook** — Every Terminal tab runs a background loop that:
-   - Polls the active Terminal tab every 0.5s via `osascript`
-   - Reads the parent shell's working directory via `lsof`
-   - Writes the CWD to `~/.vscode-bridge-cwd` when the active tab changes
-
-2. **Daemon** — Node.js daemon monitors `~/.vscode-bridge-cwd`:
-   - Discovers open VSCode windows by reading their workspace storage
-   - Matches CWD to VSCode windows using prefix matching (longest match wins, supports subdirectories)
-   - Focuses the matching window via `osascript` (System Events, AXRaise)
-
-3. **No spurious triggers** — Only switches when the Terminal tab actually changes, not on every command or `cd`.
+---
 
 ## Requirements
 
-- macOS (uses `osascript`, `lsof`, `open` command)
-- zsh shell (uses zsh-specific syntax for background job management)
-- Node.js 18+
-- Accessibility permission for Node.js (required for `osascript` + `AXRaise` window focusing; grant in System Settings → Privacy & Security → Accessibility)
-- Terminal.app automation permission (granted automatically on first use, or manually in System Settings → Privacy & Security → Automation)
+- **macOS** — uses `osascript` (AppleScript) and System Events
+- **Terminal.app** — relies on Terminal.app's AppleScript interface; not compatible with iTerm2
+- **zsh** — shell hooks use zsh-specific syntax
+- **Node.js 18+**
+- **Accessibility permission** for Node.js: System Settings → Privacy & Security → Accessibility → add Node.js
+- **Terminal.app automation permission**: granted automatically on first use (System Settings → Privacy & Security → Automation)
+
+---
+
+## Commands
+
+```bash
+tvs daemon start     # Install hooks in ~/.zshrc and start daemon
+tvs daemon stop      # Stop daemon and remove hooks from ~/.zshrc
+tvs daemon status    # Show daemon status, last known CWD, and recent logs
+tvs list             # List all open VS Code windows
+tvs switch <id>      # Manually focus a specific VS Code window
+```
+
+---
+
+## How it works
+
+1. **Shell hook** (installed in `~/.zshrc`): each Terminal tab runs a background loop that polls Terminal.app every 0.5s for the active tab's TTY. When the active tab changes, it finds the shell process on that TTY via `lsof` and writes its CWD to `~/.vscode-bridge-cwd`.
+
+2. **Daemon**: a background Node.js process watches `~/.vscode-bridge-cwd`. On change, it reads VS Code's workspace storage metadata to discover open windows, matches the CWD using longest-prefix matching, focuses the matching window via `osascript` (AXRaise), then returns focus to Terminal.
+
+3. **No spurious triggers**: the hook only writes when the active tab _changes_, not on every command or `cd`.
+
+---
 
 ## Troubleshooting
 
 **Windows not switching on tab change:**
-- Verify daemon is running: `pgrep -f "tvs.*daemon run"`
-- Check daemon logs: `tail -20 ~/Library/Logs/terminal-vscode-sync-daemon.log`
-- Reload shell hooks in your Terminal tabs: `unset _VSCODE_BRIDGE_LOADED && source ~/.zshrc`
+- Verify daemon is running: `tvs daemon status`
+- Check daemon logs: `tail -30 ~/Library/Logs/terminal-vscode-sync-daemon.log`
+- Reload shell hooks in each Terminal tab: `exec zsh`
 
 **VSCode window not raising / osascript error:**
-- Grant Accessibility permission: System Settings → Privacy & Security → Accessibility → add Node.js (or the terminal running the daemon)
+- Grant Accessibility permission: System Settings → Privacy & Security → Accessibility → add Node.js (or the `node` binary in use)
 
 **Terminal.app permission denied:**
-- Grant permission in System Settings → Privacy & Security → Automation → Terminal.app
+- Grant in System Settings → Privacy & Security → Automation → Terminal.app
 
-## Development
+**After reinstalling or upgrading:**
+- Run `tvs daemon start` again to update the hooks in `~/.zshrc` and restart the daemon.
 
-Run tests:
+---
 
-```bash
-npm test
-```
+## Limitations
 
-Expected: 11 tests pass (4 suites: Config, CWD, Discovery, Window Switcher)
+- macOS only
+- Terminal.app only (not iTerm2, Warp, etc.)
+- zsh only
 
-See [CLAUDE.md](./CLAUDE.md) for architecture and design decisions.
+---
 
-## Status
+## Contributing / Development
 
-Terminal bridge daemon implemented and working:
-- ✅ Auto-switch on Terminal tab change
-- ✅ Discover VSCode windows from workspace storage
-- ✅ Match by working directory with prefix matching
-- ✅ Focus windows without cycling through all of them
-- ✅ No spurious triggers (only on actual tab switches)
-- ✅ Full test coverage
-
-## Known limitations
-
-- macOS only (uses `osascript` and System Events)
-- zsh only (shell hooks use zsh-specific syntax)
+See [docs/development.md](./docs/development.md).
