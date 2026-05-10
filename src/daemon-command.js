@@ -2,54 +2,28 @@ import { execSync, spawnSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { startBridge, CWD_FILE } from './terminal-bridge.js';
+import { startBridge } from './terminal-bridge.js';
 
 const LOG_PATH = path.join(os.homedir(), 'Library/Logs/terminal-vscode-sync-daemon.log');
 const ZSHRC_PATH = path.join(os.homedir(), '.zshrc');
 const PGREP_PATTERN = 'terminal-vscode-sync.*daemon run';
 
-// Daemon auto-start hook
 const HOOK_MARKER = 'vscode-windows-daemon-hook';
 const HOOK_START = `# ${HOOK_MARKER}-start`;
 const HOOK_END = `# ${HOOK_MARKER}-end`;
 
-// Shell CWD reporting hooks (writes CWD to file on tab switch; daemon handles VSCode focus and Terminal refocus)
-const CWD_HOOK_MARKER = 'vscode-windows-cwd-hook';
-const CWD_HOOK_START = `# ${CWD_HOOK_MARKER}-start`;
-const CWD_HOOK_END = `# ${CWD_HOOK_MARKER}-end`;
+// Legacy CWD-reporting shell hook — no longer installed (Node now polls Terminal directly).
+// Kept here only to remove old installations from ~/.zshrc.
+const LEGACY_CWD_HOOK_START = '# vscode-windows-cwd-hook-start';
+const LEGACY_CWD_HOOK_END = '# vscode-windows-cwd-hook-end';
+const LEGACY_CWD_FILE = path.join(os.homedir(), '.vscode-bridge-cwd');
 
 function buildHook(nodePath, scriptPath) {
   return `${HOOK_START}
 if ! pgrep -qf "${PGREP_PATTERN}" 2>/dev/null; then
-  nohup "${nodePath}" "${scriptPath}" daemon run >> "${LOG_PATH}" 2>&1 &
+  nohup "${nodePath}" "${scriptPath}" daemon run >> "${LOG_PATH}" 2>&1 &!
 fi
 ${HOOK_END}`;
-}
-
-function buildCwdHook() {
-  return `${CWD_HOOK_START}
-# Guard using shell PID — each shell instance (including after exec zsh) runs its own monitor
-if [[ -z \${_VSCODE_BRIDGE_PID} || \${_VSCODE_BRIDGE_PID} != $$ ]]; then
-  export _VSCODE_BRIDGE_PID=$$
-  {
-    owner_pid=$$
-    prev_tty=""
-    while sleep 0.5; do
-      kill -0 $owner_pid 2>/dev/null || exit 0
-      active=$(osascript -e 'tell application "Terminal" to get tty of selected tab of front window' 2>/dev/null)
-      [[ $active != /dev/* ]] && continue
-      if [[ $active != $prev_tty ]]; then
-        prev_tty=$active
-        shell_pid=$(lsof 2>/dev/null | grep "$active\$" | awk '$1 ~ /^(zsh|bash|fish|sh)$/ {print $2}' | sort -n | tail -1)
-        if [[ -n $shell_pid ]]; then
-          target_cwd=$(lsof -a -p $shell_pid -d cwd -F n 2>/dev/null | awk '/^n/{print substr($0,2); exit}')
-          [[ -n $target_cwd ]] && print -r -- "$target_cwd" > "${CWD_FILE}"
-        fi
-      fi
-    done
-  } > /dev/null 2>&1 &!
-fi
-${CWD_HOOK_END}`;
 }
 
 function readZshrc() {
@@ -61,8 +35,8 @@ function hookIsInstalled(content) {
   return content.includes(HOOK_START);
 }
 
-function cwdHookIsInstalled(content) {
-  return content.includes(CWD_HOOK_START);
+function legacyCwdHookIsInstalled(content) {
+  return content.includes(LEGACY_CWD_HOOK_START);
 }
 
 function removeBlock(content, start, end) {
@@ -73,6 +47,25 @@ function removeBlock(content, start, end) {
 function isDaemonRunning() {
   const result = spawnSync('pgrep', ['-qf', PGREP_PATTERN], { encoding: 'utf-8' });
   return result.status === 0;
+}
+
+function removeLegacyArtifacts() {
+  let removed = false;
+  let existing = readZshrc();
+  if (legacyCwdHookIsInstalled(existing)) {
+    existing = removeBlock(existing, LEGACY_CWD_HOOK_START, LEGACY_CWD_HOOK_END);
+    fs.writeFileSync(ZSHRC_PATH, existing);
+    console.log('Removed legacy CWD shell hook from ~/.zshrc.');
+    removed = true;
+  }
+  if (fs.existsSync(LEGACY_CWD_FILE)) {
+    try {
+      fs.unlinkSync(LEGACY_CWD_FILE);
+      console.log(`Removed legacy CWD file: ${LEGACY_CWD_FILE}`);
+      removed = true;
+    } catch { /* ignore */ }
+  }
+  return removed;
 }
 
 export async function daemonCommand(subcommand) {
@@ -86,28 +79,30 @@ export async function daemonCommand(subcommand) {
       const nodePath = process.execPath;
       const scriptPath = fs.realpathSync(process.argv[1]);
 
+      removeLegacyArtifacts();
+
       let existing = readZshrc();
-
-      // Always replace current hooks to ensure they're current
       if (hookIsInstalled(existing)) existing = removeBlock(existing, HOOK_START, HOOK_END);
-      if (cwdHookIsInstalled(existing)) existing = removeBlock(existing, CWD_HOOK_START, CWD_HOOK_END);
       existing = existing.trimEnd() + '\n\n' + buildHook(nodePath, scriptPath) + '\n';
-      existing = existing.trimEnd() + '\n\n' + buildCwdHook() + '\n';
       fs.writeFileSync(ZSHRC_PATH, existing);
-      console.log('Installed hooks in ~/.zshrc.');
+      console.log('Installed daemon auto-start hook in ~/.zshrc.');
 
+      // Restart the daemon so the new code is loaded.
       if (isDaemonRunning()) {
-        console.log('Daemon is already running.');
-      } else {
-        fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
-        const child = spawn('sh', [
-          '-c',
-          `nohup "${nodePath}" "${scriptPath}" daemon run >> "${LOG_PATH}" 2>&1 &`,
-        ], { detached: true, stdio: 'ignore' });
-        child.unref();
-        await new Promise(r => setTimeout(r, 500));
-        console.log(isDaemonRunning() ? 'Daemon started.' : 'Daemon started (verifying in log).');
+        try {
+          execSync(`pkill -f "${PGREP_PATTERN}"`, { encoding: 'utf-8' });
+          await new Promise(r => setTimeout(r, 300));
+        } catch { /* not running */ }
       }
+
+      fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+      const child = spawn('sh', [
+        '-c',
+        `nohup "${nodePath}" "${scriptPath}" daemon run >> "${LOG_PATH}" 2>&1 &`,
+      ], { detached: true, stdio: 'ignore' });
+      child.unref();
+      await new Promise(r => setTimeout(r, 500));
+      console.log(isDaemonRunning() ? 'Daemon started.' : 'Daemon started (verifying in log).');
 
       console.log(`\nAuto-starts on every new terminal session via ~/.zshrc.`);
       console.log(`Log: ${LOG_PATH}`);
@@ -127,31 +122,33 @@ export async function daemonCommand(subcommand) {
         existing = removeBlock(existing, HOOK_START, HOOK_END);
         console.log('Removed daemon hook from ~/.zshrc.');
       }
-      if (cwdHookIsInstalled(existing)) {
-        existing = removeBlock(existing, CWD_HOOK_START, CWD_HOOK_END);
-        console.log('Removed CWD hook from ~/.zshrc.');
+      if (legacyCwdHookIsInstalled(existing)) {
+        existing = removeBlock(existing, LEGACY_CWD_HOOK_START, LEGACY_CWD_HOOK_END);
+        console.log('Removed legacy CWD hook from ~/.zshrc.');
       }
       fs.writeFileSync(ZSHRC_PATH, existing);
+      if (fs.existsSync(LEGACY_CWD_FILE)) {
+        try { fs.unlinkSync(LEGACY_CWD_FILE); } catch { /* ignore */ }
+      }
       break;
     }
 
     case 'status': {
       if (isDaemonRunning()) {
-        const pid = execSync(`pgrep -f "${PGREP_PATTERN}"`, { encoding: 'utf-8' }).trim();
-        console.log(`Status: running (PID ${pid})`);
+        try {
+          const pid = execSync(`pgrep -f "${PGREP_PATTERN}"`, { encoding: 'utf-8' }).trim();
+          console.log(`Status: running (PID ${pid})`);
+        } catch {
+          console.log('Status: running (PID unavailable)');
+        }
       } else {
         console.log('Status: stopped');
       }
 
       const existing = readZshrc();
       console.log(`Auto-start hook: ${hookIsInstalled(existing) ? 'installed' : 'not installed'}`);
-      console.log(`CWD hook: ${cwdHookIsInstalled(existing) ? 'installed' : 'not installed'}`);
-
-      if (fs.existsSync(CWD_FILE)) {
-        try {
-          const cwd = fs.readFileSync(CWD_FILE, 'utf-8').trim();
-          if (cwd) console.log(`Last reported CWD: ${cwd}`);
-        } catch { /* no cwd file yet */ }
+      if (legacyCwdHookIsInstalled(existing)) {
+        console.log('Legacy CWD hook: present (run `tvs daemon start` to remove)');
       }
 
       if (fs.existsSync(LOG_PATH)) {

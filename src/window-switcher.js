@@ -2,6 +2,15 @@ import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
 
+// Raises the matching VSCode window via Accessibility (AXRaise). This is the
+// only mechanism that reorders a backgrounded app's windows without bringing
+// the app to the foreground — `open -a` and the `code` CLI both require the
+// app to come forward, which causes dock-bounce / wrong-window behavior on
+// macOS Sequoia.
+//
+// Requires:
+//   • Privacy & Security → Automation → Terminal → System Events (ON)
+//   • Privacy & Security → Accessibility → Terminal (ON)
 export async function focusWindow(folderPath) {
   if (os.platform() !== 'darwin') {
     throw new Error('Window switching currently only supports macOS');
