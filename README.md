@@ -23,6 +23,8 @@ Open each project folder in VSCode first, then start switching Terminal tabs. Th
 
 **After sleep/wake:** The daemon usually survives. If switching stops working, open a new terminal tab or run `tvs daemon start`.
 
+**After a macOS update:** System updates occasionally reset Automation permissions. If switching stops working after an update, re-grant permission in System Settings → Privacy & Security → Automation → Terminal, then run `tvs daemon start`.
+
 ---
 
 ## Requirements
@@ -69,7 +71,7 @@ tvs switch <id>      # Manually focus a specific VSCode window
 - Grant Accessibility permission: System Settings → Privacy & Security → Accessibility → add Node.js (or the `node` binary in use)
 
 **Terminal.app permission denied:**
-- Grant in System Settings → Privacy & Security → Automation → Terminal.app
+- Grant in System Settings → Privacy & Security → Automation → Terminal
 
 **After reinstalling or upgrading:**
 - Run `tvs daemon start` again to update the hooks in `~/.zshrc` and restart the daemon.
