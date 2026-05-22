@@ -23,14 +23,14 @@ set allWindows to windows
 set didFocus to false
 repeat with w in allWindows
 set winTitle to title of w
-if winTitle contains "${folderName}" then
+if winTitle is "${folderName}" or winTitle starts with "${folderName} " or winTitle contains " ${folderName} " then
 perform action "AXRaise" of w
 set didFocus to true
 exit repeat
 end if
 end repeat
 if didFocus is false then
-error "No VSCode window found with title containing: ${folderName}"
+error "No VSCode window found with title segment: ${folderName}"
 end if
 end tell
 end tell`;
